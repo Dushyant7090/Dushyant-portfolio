@@ -56,11 +56,12 @@ function ToolkitPill({
   return (
     <li className="list-none">
       <div
+        data-touch-hoverable={interactive ? 'pill' : undefined}
         className={`group inline-flex items-center rounded-full bg-white/88 border border-black/[0.08] shadow-[0_1px_4px_rgba(17,19,21,0.06)] select-none ${
           compact ? 'gap-1.5 h-[26px] px-2.5' : 'gap-2 h-[33px] px-3'
         } ${
           interactive
-            ? 'transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-white hover:border-[#6A0DAD]/35 hover:shadow-[0_4px_12px_rgba(106,13,173,0.14)] motion-reduce:hover:translate-y-0'
+            ? 'transition-all duration-150 ease-out hover:-translate-y-0.5 data-[touch-hover=true]:-translate-y-0.5 hover:bg-white data-[touch-hover=true]:bg-white hover:border-[#6A0DAD]/35 data-[touch-hover=true]:border-[#6A0DAD]/35 hover:shadow-[0_4px_12px_rgba(106,13,173,0.14)] data-[touch-hover=true]:shadow-[0_4px_12px_rgba(106,13,173,0.14)] motion-reduce:hover:translate-y-0'
             : ''
         }`}
       >

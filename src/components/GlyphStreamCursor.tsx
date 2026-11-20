@@ -10,6 +10,18 @@ import {
   stepTrailNodes,
   type TrailNode,
 } from '../utils/glyphStream';
+import {
+  TOUCH_HOLD_MS,
+  collectTouchHoverTargetsAtPoint,
+  createInitialTouchState,
+  endTouchGesture,
+  evaluateTouchHold,
+  markTouchScrolling,
+  startTouchGesture,
+  stepTouchMove,
+  syncTouchHoverTargets,
+  type TouchGestureState,
+} from '../utils/touchCursor';
 
 interface GlyphStreamCursorProps {
   colors?: [string, string];
@@ -53,6 +65,12 @@ export function GlyphStreamCursor({
     hasMoved: false,
     isInside: false,
   });
+
+  const touchStateRef = useRef<TouchGestureState>(createInitialTouchState());
+  const touchHoldTimerRef = useRef<number | null>(null);
+  const touchHoverTargetsRef = useRef<Set<Element>>(new Set());
+  const activePointerTypeRef = useRef<string>('mouse');
+  const lastHoverProbeRef = useRef<{ x: number; y: number }>({ x: -9999, y: -9999 });
 
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number | null>(null);
@@ -247,14 +265,170 @@ export function GlyphStreamCursor({
 
     const syncSize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.floor(window.innerWidth * dpr);
-      canvas.height = Math.floor(window.innerHeight * dpr);
+      const nextW = Math.floor(window.innerWidth * dpr);
+      const nextH = Math.floor(window.innerHeight * dpr);
+      if (canvas.width !== nextW || canvas.height !== nextH) {
+        canvas.width = nextW;
+        canvas.height = nextH;
+      }
       paintFrame();
     };
 
     syncSize();
 
+    const clearHoldTimer = () => {
+      if (touchHoldTimerRef.current !== null) {
+        window.clearTimeout(touchHoldTimerRef.current);
+        touchHoldTimerRef.current = null;
+      }
+    };
+
+    const clearTouchHover = () => {
+      if (touchHoverTargetsRef.current.size > 0) {
+        touchHoverTargetsRef.current = syncTouchHoverTargets(
+          new Set(),
+          touchHoverTargetsRef.current
+        );
+      }
+      lastHoverProbeRef.current = { x: -9999, y: -9999 };
+    };
+
+    const syncTouchHoverAt = (x: number, y: number, force = false) => {
+      if (
+        !force &&
+        Math.hypot(x - lastHoverProbeRef.current.x, y - lastHoverProbeRef.current.y) < 2
+      ) {
+        return;
+      }
+      lastHoverProbeRef.current = { x, y };
+      const nextTargets = collectTouchHoverTargetsAtPoint(x, y);
+      touchHoverTargetsRef.current = syncTouchHoverTargets(
+        nextTargets,
+        touchHoverTargetsRef.current
+      );
+    };
+
+    const resetTouchCursorImmediately = () => {
+      clearHoldTimer();
+      clearTouchHover();
+      nodesRef.current = [];
+      pointerRef.current.isInside = false;
+      pointerRef.current.hasMoved = false;
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      paintFrame();
+    };
+
+    const activateTouchDragging = (x: number, y: number) => {
+      const ptr = pointerRef.current;
+      ptr.isInside = true;
+      ptr.hasMoved = true;
+      ptr.x = x;
+      ptr.y = y;
+      ptr.smoothX = x;
+      ptr.smoothY = y;
+      nodesRef.current.push(
+        createTrailNode(x, y, 0, 0, 22, thickness, trailLength)
+      );
+      syncTouchHoverAt(x, y, true);
+      startLoop();
+    };
+
+    const syncCanvasDataset = (phase: string, pointerType: string) => {
+      canvas.dataset.touchPhase = phase;
+      canvas.dataset.pointerType = pointerType;
+    };
+
+    const handlePointerDown = (e: PointerEvent) => {
+      activePointerTypeRef.current = e.pointerType;
+
+      if (e.pointerType === 'touch') {
+        if (!e.isPrimary) {
+          touchStateRef.current = markTouchScrolling(touchStateRef.current);
+          syncCanvasDataset(touchStateRef.current.phase, 'touch');
+          resetTouchCursorImmediately();
+          return;
+        }
+
+        clearHoldTimer();
+        touchStateRef.current = startTouchGesture(
+          e.clientX,
+          e.clientY,
+          e.pointerId,
+          performance.now()
+        );
+        syncCanvasDataset('pending', 'touch');
+
+        touchHoldTimerRef.current = window.setTimeout(() => {
+          touchHoldTimerRef.current = null;
+          const evaluated = evaluateTouchHold(touchStateRef.current, performance.now());
+          if (evaluated.phase === 'dragging' && touchStateRef.current.phase === 'pending') {
+            touchStateRef.current = evaluated;
+            syncCanvasDataset('dragging', 'touch');
+            activateTouchDragging(evaluated.x, evaluated.y);
+          }
+        }, TOUCH_HOLD_MS);
+        return;
+      }
+
+      // Desktop mouse / pen path preserved cleanly
+      clearHoldTimer();
+      clearTouchHover();
+      touchStateRef.current = endTouchGesture();
+      syncCanvasDataset('idle', e.pointerType || 'mouse');
+
+      pointerRef.current.isInside = true;
+      const burst = createSplashBurst(e.clientX, e.clientY, 9, 24, trailLength);
+      nodesRef.current.push(...burst);
+      if (nodesRef.current.length > 160) {
+        nodesRef.current.splice(0, nodesRef.current.length - 160);
+      }
+      startLoop();
+    };
+
     const handlePointerMove = (e: PointerEvent) => {
+      activePointerTypeRef.current = e.pointerType;
+
+      if (e.pointerType === 'touch') {
+        if (touchStateRef.current.pointerId !== e.pointerId) {
+          return;
+        }
+
+        const prevPhase = touchStateRef.current.phase;
+        const next = stepTouchMove(
+          touchStateRef.current,
+          e.clientX,
+          e.clientY,
+          performance.now()
+        );
+        touchStateRef.current = next;
+        syncCanvasDataset(next.phase, 'touch');
+
+        if (next.phase === 'scrolling') {
+          resetTouchCursorImmediately();
+          return;
+        }
+
+        if (next.phase === 'dragging') {
+          clearHoldTimer();
+          if (prevPhase !== 'dragging') {
+            activateTouchDragging(next.x, next.y);
+          } else {
+            const ptr = pointerRef.current;
+            ptr.isInside = true;
+            ptr.x = e.clientX;
+            ptr.y = e.clientY;
+            syncTouchHoverAt(e.clientX, e.clientY);
+            startLoop();
+          }
+        }
+        return;
+      }
+
+      // Desktop mouse / pen path preserved cleanly
+      syncCanvasDataset('idle', e.pointerType || 'mouse');
       const ptr = pointerRef.current;
       ptr.isInside = true;
       if (!ptr.hasMoved) {
@@ -273,30 +447,61 @@ export function GlyphStreamCursor({
       startLoop();
     };
 
-    const handlePointerDown = (e: PointerEvent) => {
-      pointerRef.current.isInside = true;
-      const burst = createSplashBurst(e.clientX, e.clientY, 9, 24, trailLength);
-      nodesRef.current.push(...burst);
-      if (nodesRef.current.length > 160) {
-        nodesRef.current.splice(0, nodesRef.current.length - 160);
+    const handlePointerEndOrCancel = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') {
+        return;
       }
-      startLoop();
+      if (
+        touchStateRef.current.pointerId === null ||
+        touchStateRef.current.pointerId === e.pointerId
+      ) {
+        touchStateRef.current = endTouchGesture();
+        syncCanvasDataset('idle', 'touch');
+        resetTouchCursorImmediately();
+      }
+    };
+
+    const handleWindowScroll = () => {
+      if (
+        activePointerTypeRef.current === 'touch' ||
+        touchStateRef.current.phase !== 'idle'
+      ) {
+        touchStateRef.current = markTouchScrolling(touchStateRef.current);
+        syncCanvasDataset(touchStateRef.current.phase, 'touch');
+        resetTouchCursorImmediately();
+      }
     };
 
     const handlePointerLeaveWindow = () => {
+      if (activePointerTypeRef.current === 'touch') {
+        touchStateRef.current = endTouchGesture();
+        syncCanvasDataset('idle', 'touch');
+        resetTouchCursorImmediately();
+        return;
+      }
       pointerRef.current.isInside = false;
       startLoop();
     };
 
     window.addEventListener('resize', syncSize);
-    window.addEventListener('pointermove', handlePointerMove, { passive: true });
     window.addEventListener('pointerdown', handlePointerDown, { passive: true });
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    window.addEventListener('pointerup', handlePointerEndOrCancel, { passive: true });
+    window.addEventListener('pointercancel', handlePointerEndOrCancel, { passive: true });
+    window.addEventListener('scroll', handleWindowScroll, { passive: true });
+    window.addEventListener('blur', handlePointerLeaveWindow);
     document.addEventListener('mouseleave', handlePointerLeaveWindow);
 
     return () => {
+      clearHoldTimer();
+      clearTouchHover();
       window.removeEventListener('resize', syncSize);
-      window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerEndOrCancel);
+      window.removeEventListener('pointercancel', handlePointerEndOrCancel);
+      window.removeEventListener('scroll', handleWindowScroll);
+      window.removeEventListener('blur', handlePointerLeaveWindow);
       document.removeEventListener('mouseleave', handlePointerLeaveWindow);
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
@@ -310,6 +515,7 @@ export function GlyphStreamCursor({
       ref={canvasRef}
       aria-hidden="true"
       data-testid="glyph-stream-cursor"
+      data-touch-phase="idle"
       className="fixed inset-0 w-full h-full pointer-events-none z-[60]"
     />
   );

@@ -260,7 +260,7 @@ export function WorkSection() {
                     aria-label={`Read the ${project.title} case study`}
                     className="group/preview relative w-full aspect-[16/10] lg:aspect-auto lg:min-h-[214px] rounded-[16px] sm:rounded-[18px] overflow-hidden border border-white/80 ring-1 ring-black/[0.06] shadow-[0_8px_22px_rgba(17,19,21,0.06)] text-left focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#6A0DAD]"
                   >
-                    <div className="w-full h-full transition-transform duration-300 ease-out group-hover/preview:scale-[1.015]">
+                    <div className="w-full h-full transition-transform duration-300 ease-out group-hover/preview:scale-[1.015] group-data-[touch-hover=true]/preview:scale-[1.015]">
                       <WorkProjectPreview projectId={project.id} />
                     </div>
                   </button>
@@ -272,7 +272,7 @@ export function WorkSection() {
                     aria-label={`Open ${project.title} GitHub profile`}
                     className="group/preview relative w-full aspect-[16/10] lg:aspect-auto lg:min-h-[214px] rounded-[16px] sm:rounded-[18px] overflow-hidden border border-white/80 ring-1 ring-black/[0.06] shadow-[0_8px_22px_rgba(17,19,21,0.06)] block focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#6A0DAD]"
                   >
-                    <div className="w-full h-full transition-transform duration-300 ease-out group-hover/preview:scale-[1.015]">
+                    <div className="w-full h-full transition-transform duration-300 ease-out group-hover/preview:scale-[1.015] group-data-[touch-hover=true]/preview:scale-[1.015]">
                       <WorkProjectPreview projectId={project.id} />
                     </div>
                   </a>
@@ -359,12 +359,12 @@ export function WorkSection() {
                       href={project.githubUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="group/link inline-flex items-center gap-1.5 min-h-[40px] text-[13px] font-medium text-[#111315] hover:text-[#6A0DAD] transition-colors duration-150 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6A0DAD]"
+                      className="group/link inline-flex items-center gap-1.5 min-h-[40px] text-[13px] font-medium text-[#111315] hover:text-[#6A0DAD] data-[touch-hover=true]:text-[#6A0DAD] transition-colors duration-150 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6A0DAD]"
                     >
                       <GitHubMark />
                       <span>GitHub</span>
                       <ArrowUpRight
-                        className="w-3.5 h-3.5 opacity-60 group-hover/link:opacity-100 transition-transform duration-150 group-hover/link:-translate-y-0.5 group-hover/link:translate-x-0.5"
+                        className="w-3.5 h-3.5 opacity-60 group-hover/link:opacity-100 group-data-[touch-hover=true]/link:opacity-100 transition-transform duration-150 group-hover/link:-translate-y-0.5 group-hover/link:translate-x-0.5 group-data-[touch-hover=true]/link:-translate-y-0.5 group-data-[touch-hover=true]/link:translate-x-0.5"
                         aria-hidden="true"
                       />
                     </a>
@@ -375,11 +375,11 @@ export function WorkSection() {
                       <button
                         type="button"
                         onClick={() => setActiveCaseId(project.id)}
-                        className="group/link inline-flex items-center gap-1 min-h-[40px] text-[13px] font-medium text-[#111315] hover:text-[#6A0DAD] transition-colors duration-150 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6A0DAD]"
+                        className="group/link inline-flex items-center gap-1 min-h-[40px] text-[13px] font-medium text-[#111315] hover:text-[#6A0DAD] data-[touch-hover=true]:text-[#6A0DAD] transition-colors duration-150 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6A0DAD]"
                       >
                         <span>Read the Case</span>
                         <ArrowUpRight
-                          className="w-3.5 h-3.5 opacity-60 group-hover/link:opacity-100 transition-transform duration-150 group-hover/link:-translate-y-0.5 group-hover/link:translate-x-0.5"
+                          className="w-3.5 h-3.5 opacity-60 group-hover/link:opacity-100 group-data-[touch-hover=true]/link:opacity-100 transition-transform duration-150 group-hover/link:-translate-y-0.5 group-hover/link:translate-x-0.5 group-data-[touch-hover=true]/link:-translate-y-0.5 group-data-[touch-hover=true]/link:translate-x-0.5"
                           aria-hidden="true"
                         />
                       </button>
@@ -388,11 +388,11 @@ export function WorkSection() {
                         href={project.githubUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="group/link inline-flex items-center gap-1 min-h-[40px] text-[13px] font-medium text-[#111315] hover:text-[#6A0DAD] transition-colors duration-150 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6A0DAD]"
+                        className="group/link inline-flex items-center gap-1 min-h-[40px] text-[13px] font-medium text-[#111315] hover:text-[#6A0DAD] data-[touch-hover=true]:text-[#6A0DAD] transition-colors duration-150 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6A0DAD]"
                       >
                         <span>View Contribution</span>
                         <ArrowUpRight
-                          className="w-3.5 h-3.5 opacity-60 group-hover/link:opacity-100 transition-transform duration-150 group-hover/link:-translate-y-0.5 group-hover/link:translate-x-0.5"
+                          className="w-3.5 h-3.5 opacity-60 group-hover/link:opacity-100 group-data-[touch-hover=true]/link:opacity-100 transition-transform duration-150 group-hover/link:-translate-y-0.5 group-hover/link:translate-x-0.5 group-data-[touch-hover=true]/link:-translate-y-0.5 group-data-[touch-hover=true]/link:translate-x-0.5"
                           aria-hidden="true"
                         />
                       </a>

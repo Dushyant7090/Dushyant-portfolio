@@ -11,6 +11,16 @@ import {
   type WovenGridLayout,
   type WovenPointer,
 } from '../utils/wovenWordmark';
+import {
+  TOUCH_HOLD_MS,
+  createInitialTouchState,
+  endTouchGesture,
+  evaluateTouchHold,
+  markTouchScrolling,
+  startTouchGesture,
+  stepTouchMove,
+  type TouchGestureState,
+} from '../utils/touchCursor';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -22,7 +32,7 @@ function WovenPixelArrowUp() {
       viewBox="0 0 16 16"
       fill="currentColor"
       aria-hidden="true"
-      className="shrink-0 transition-transform duration-jk-fast group-hover:-translate-y-0.5"
+      className="shrink-0 transition-transform duration-jk-fast group-hover:-translate-y-0.5 group-data-[touch-hover=true]:-translate-y-0.5"
     >
       <rect x="7" y="1" width="2" height="2" />
       <rect x="5" y="3" width="6" height="2" />
@@ -153,6 +163,9 @@ function WovenDushyantWordmark({
     gridHeight: 0,
   });
   const pointerRef = useRef<WovenPointer>({ x: 0, y: 0, active: false });
+  const touchStateRef = useRef<TouchGestureState>(createInitialTouchState());
+  const touchHoldTimerRef = useRef<number | null>(null);
+  const lastPointerTypeRef = useRef<string>('mouse');
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const sizeRef = useRef<{ width: number; height: number; dpr: number }>({
@@ -304,6 +317,21 @@ function WovenDushyantWordmark({
       };
     }
 
+    const handleWindowScroll = () => {
+      if (lastPointerTypeRef.current === 'touch' || touchStateRef.current.phase !== 'idle') {
+        if (touchHoldTimerRef.current !== null) {
+          window.clearTimeout(touchHoldTimerRef.current);
+          touchHoldTimerRef.current = null;
+        }
+        touchStateRef.current = markTouchScrolling(touchStateRef.current);
+        if (pointerRef.current.active) {
+          pointerRef.current.active = false;
+          ensurePhysicsLoop();
+        }
+      }
+    };
+    window.addEventListener('scroll', handleWindowScroll, { passive: true });
+
     const observer = new ResizeObserver(() => {
       rebuildGrid();
     });
@@ -311,13 +339,25 @@ function WovenDushyantWordmark({
 
     return () => {
       cancelled = true;
+      window.removeEventListener('scroll', handleWindowScroll);
+      if (touchHoldTimerRef.current !== null) {
+        window.clearTimeout(touchHoldTimerRef.current);
+        touchHoldTimerRef.current = null;
+      }
       observer.disconnect();
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
     };
-  }, [rebuildGrid]);
+  }, [ensurePhysicsLoop, rebuildGrid]);
+
+  const clearTouchHoldTimer = () => {
+    if (touchHoldTimerRef.current !== null) {
+      window.clearTimeout(touchHoldTimerRef.current);
+      touchHoldTimerRef.current = null;
+    }
+  };
 
   const updatePointerFromEvent = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -331,7 +371,86 @@ function WovenDushyantWordmark({
     ensurePhysicsLoop();
   };
 
-  const handlePointerLeave = () => {
+  const isGlobalTouchDragging = () => {
+    if (typeof document === 'undefined') return false;
+    const cursorCanvas = document.querySelector('[data-testid="glyph-stream-cursor"]');
+    return cursorCanvas?.getAttribute('data-touch-phase') === 'dragging';
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    lastPointerTypeRef.current = e.pointerType;
+    if (e.pointerType !== 'touch') {
+      updatePointerFromEvent(e.clientX, e.clientY);
+      return;
+    }
+    if (!e.isPrimary) {
+      clearTouchHoldTimer();
+      touchStateRef.current = markTouchScrolling(touchStateRef.current);
+      pointerRef.current.active = false;
+      ensurePhysicsLoop();
+      return;
+    }
+    clearTouchHoldTimer();
+    touchStateRef.current = startTouchGesture(
+      e.clientX,
+      e.clientY,
+      e.pointerId,
+      performance.now()
+    );
+    touchHoldTimerRef.current = window.setTimeout(() => {
+      touchHoldTimerRef.current = null;
+      const evaluated = evaluateTouchHold(touchStateRef.current, performance.now());
+      if (evaluated.phase === 'dragging' && touchStateRef.current.phase === 'pending') {
+        touchStateRef.current = evaluated;
+        updatePointerFromEvent(evaluated.x, evaluated.y);
+      }
+    }, TOUCH_HOLD_MS);
+  };
+
+  const handlePointerEnter = (e: React.PointerEvent<HTMLDivElement>) => {
+    lastPointerTypeRef.current = e.pointerType;
+    if (e.pointerType === 'touch') {
+      if (touchStateRef.current.phase === 'dragging' || isGlobalTouchDragging()) {
+        updatePointerFromEvent(e.clientX, e.clientY);
+      }
+      return;
+    }
+    updatePointerFromEvent(e.clientX, e.clientY);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    lastPointerTypeRef.current = e.pointerType;
+    if (e.pointerType === 'touch') {
+      if (touchStateRef.current.pointerId === e.pointerId) {
+        const next = stepTouchMove(
+          touchStateRef.current,
+          e.clientX,
+          e.clientY,
+          performance.now()
+        );
+        touchStateRef.current = next;
+        if (next.phase === 'scrolling') {
+          clearTouchHoldTimer();
+          pointerRef.current.active = false;
+          ensurePhysicsLoop();
+          return;
+        }
+        if (next.phase !== 'dragging') {
+          return;
+        }
+        clearTouchHoldTimer();
+      } else if (!isGlobalTouchDragging()) {
+        return;
+      }
+    }
+    updatePointerFromEvent(e.clientX, e.clientY);
+  };
+
+  const handlePointerLeave = (e?: React.PointerEvent<HTMLDivElement>) => {
+    if (!e || e.pointerType === 'touch' || lastPointerTypeRef.current === 'touch') {
+      clearTouchHoldTimer();
+      touchStateRef.current = endTouchGesture();
+    }
     pointerRef.current.active = false;
     ensurePhysicsLoop();
   };
@@ -340,13 +459,14 @@ function WovenDushyantWordmark({
     <div
       ref={containerRef}
       data-testid="woven-dushyant-wordmark"
-      onPointerEnter={(e) => updatePointerFromEvent(e.clientX, e.clientY)}
-      onPointerMove={(e) => updatePointerFromEvent(e.clientX, e.clientY)}
-      onPointerDown={(e) => updatePointerFromEvent(e.clientX, e.clientY)}
+      onPointerDown={handlePointerDown}
+      onPointerEnter={handlePointerEnter}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerLeave}
       onPointerLeave={handlePointerLeave}
       onPointerCancel={handlePointerLeave}
       style={canvasBoxHeight !== null ? { height: `${canvasBoxHeight}px` } : undefined}
-      className="relative w-full h-[80px] sm:h-[120px] md:h-[150px] lg:h-[180px] select-none touch-pan-y"
+      className="relative w-full h-[80px] sm:h-[120px] md:h-[150px] lg:h-[180px] select-none"
     >
       <span className="sr-only">DUSHYANT</span>
       <canvas
@@ -552,11 +672,11 @@ export function FooterSection() {
             <div className="footer-animate-text inline-block">
               <a
                 href="mailto:dushyant7090@gmail.com"
-                className="jk-cut group inline-flex items-center justify-center gap-2.5 bg-[#111315] hover:bg-[rgb(218,72,24)] text-[#F7F6F2] font-geist-mono text-[12px] tracking-[0.16em] uppercase px-7 sm:px-8 py-4 min-h-[48px] transition-all duration-jk-fast hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(218,72,24,0.24)] motion-reduce:hover:translate-y-0 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[rgb(218,72,24)]"
+                className="jk-cut group inline-flex items-center justify-center gap-2.5 bg-[#111315] hover:bg-[rgb(218,72,24)] data-[touch-hover=true]:bg-[rgb(218,72,24)] text-[#F7F6F2] font-geist-mono text-[12px] tracking-[0.16em] uppercase px-7 sm:px-8 py-4 min-h-[48px] transition-all duration-jk-fast hover:-translate-y-0.5 data-[touch-hover=true]:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(218,72,24,0.24)] data-[touch-hover=true]:shadow-[0_10px_24px_rgba(218,72,24,0.24)] motion-reduce:hover:translate-y-0 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[rgb(218,72,24)]"
               >
                 <span>SEND AN EMAIL</span>
                 <ArrowUpRight
-                  className="w-4 h-4 transition-transform duration-jk-fast group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                  className="w-4 h-4 transition-transform duration-jk-fast group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-data-[touch-hover=true]:-translate-y-0.5 group-data-[touch-hover=true]:translate-x-0.5"
                   aria-hidden="true"
                 />
               </a>
@@ -574,11 +694,11 @@ export function FooterSection() {
               <li>
                 <a
                   href="tel:+917090309201"
-                  className="group inline-flex items-center gap-1.5 min-h-[44px] font-geist text-[16px] sm:text-[17.5px] font-medium tracking-[-0.015em] text-[#111315] underline-offset-4 hover:underline transition-colors duration-jk-fast focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#111315]"
+                  className="group inline-flex items-center gap-1.5 min-h-[44px] font-geist text-[16px] sm:text-[17.5px] font-medium tracking-[-0.015em] text-[#111315] underline-offset-4 hover:underline data-[touch-hover=true]:underline transition-colors duration-jk-fast focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#111315]"
                 >
                   <span className="tabular-nums">+91 7090309201</span>
                   <ArrowUpRight
-                    className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-transform duration-jk-fast group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                    className="w-4 h-4 opacity-50 group-hover:opacity-100 group-data-[touch-hover=true]:opacity-100 transition-transform duration-jk-fast group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-data-[touch-hover=true]:-translate-y-0.5 group-data-[touch-hover=true]:translate-x-0.5"
                     aria-hidden="true"
                   />
                 </a>
@@ -586,11 +706,11 @@ export function FooterSection() {
               <li>
                 <a
                   href="mailto:dushyant7090@gmail.com"
-                  className="group inline-flex items-center gap-1.5 min-h-[44px] font-geist text-[16px] sm:text-[17.5px] font-medium tracking-[-0.015em] text-[#111315] underline-offset-4 hover:underline transition-colors duration-jk-fast break-all sm:break-normal focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#111315]"
+                  className="group inline-flex items-center gap-1.5 min-h-[44px] font-geist text-[16px] sm:text-[17.5px] font-medium tracking-[-0.015em] text-[#111315] underline-offset-4 hover:underline data-[touch-hover=true]:underline transition-colors duration-jk-fast break-all sm:break-normal focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#111315]"
                 >
                   <span>dushyant7090@gmail.com</span>
                   <ArrowUpRight
-                    className="w-4 h-4 opacity-50 group-hover:opacity-100 shrink-0 transition-transform duration-jk-fast group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                    className="w-4 h-4 opacity-50 group-hover:opacity-100 group-data-[touch-hover=true]:opacity-100 shrink-0 transition-transform duration-jk-fast group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-data-[touch-hover=true]:-translate-y-0.5 group-data-[touch-hover=true]:translate-x-0.5"
                     aria-hidden="true"
                   />
                 </a>
@@ -608,11 +728,11 @@ export function FooterSection() {
                   href="https://www.linkedin.com/in/dushyant-beniwal-b16281306/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group inline-flex items-center gap-1.5 min-h-[44px] font-geist text-[16px] sm:text-[17.5px] font-medium tracking-[-0.015em] text-[#111315] underline-offset-4 hover:underline transition-colors duration-jk-fast focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#111315]"
+                  className="group inline-flex items-center gap-1.5 min-h-[44px] font-geist text-[16px] sm:text-[17.5px] font-medium tracking-[-0.015em] text-[#111315] underline-offset-4 hover:underline data-[touch-hover=true]:underline transition-colors duration-jk-fast focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#111315]"
                 >
                   <span>LinkedIn</span>
                   <ArrowUpRight
-                    className="w-4 h-4 opacity-55 group-hover:opacity-100 transition-transform duration-jk-fast group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                    className="w-4 h-4 opacity-55 group-hover:opacity-100 group-data-[touch-hover=true]:opacity-100 transition-transform duration-jk-fast group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-data-[touch-hover=true]:-translate-y-0.5 group-data-[touch-hover=true]:translate-x-0.5"
                     aria-hidden="true"
                   />
                 </a>
@@ -640,7 +760,7 @@ export function FooterSection() {
             type="button"
             onClick={handleBackToTop}
             aria-label="Back to top"
-            className="group inline-flex items-center gap-2 min-h-[44px] -my-2 font-geist-mono text-[11px] tracking-[0.14em] uppercase text-[#111315] hover:text-[#6A0DAD] underline-offset-4 hover:underline transition-colors duration-jk-fast whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#6A0DAD]"
+            className="group inline-flex items-center gap-2 min-h-[44px] -my-2 font-geist-mono text-[11px] tracking-[0.14em] uppercase text-[#111315] hover:text-[#6A0DAD] data-[touch-hover=true]:text-[#6A0DAD] underline-offset-4 hover:underline data-[touch-hover=true]:underline transition-colors duration-jk-fast whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#6A0DAD]"
           >
             <span>BACK TO TOP</span>
             <WovenPixelArrowUp />

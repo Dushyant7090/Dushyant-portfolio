@@ -177,7 +177,8 @@
     z-index: 3;
   }
 
-  .glass-project-card:hover {
+  .glass-project-card:hover,
+  .glass-project-card[data-touch-hover="true"] {
     transform: translateY(-2px);
     background: linear-gradient(
       135deg,

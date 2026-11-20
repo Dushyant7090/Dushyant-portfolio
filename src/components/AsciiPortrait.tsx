@@ -5,6 +5,16 @@ import {
   type AsciiCell,
   type LensState,
 } from '../utils/asciiPortrait';
+import {
+  TOUCH_HOLD_MS,
+  createInitialTouchState,
+  endTouchGesture,
+  evaluateTouchHold,
+  markTouchScrolling,
+  startTouchGesture,
+  stepTouchMove,
+  type TouchGestureState,
+} from '../utils/touchCursor';
 
 interface AsciiPortraitProps {
   src: string;
@@ -32,6 +42,9 @@ export function AsciiPortrait({ src, alt }: AsciiPortraitProps) {
   const isActiveRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number | null>(null);
+  const touchStateRef = useRef<TouchGestureState>(createInitialTouchState());
+  const touchHoldTimerRef = useRef<number | null>(null);
+  const lastPointerTypeRef = useRef<string>('mouse');
 
   const [imgFailed, setImgFailed] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
@@ -228,14 +241,44 @@ export function AsciiPortrait({ src, alt }: AsciiPortraitProps) {
     };
   }, [imgLoaded, buildAsciiCache, paintLensFrame]);
 
+  const clearTouchHoldTimer = useCallback(() => {
+    if (touchHoldTimerRef.current !== null) {
+      window.clearTimeout(touchHoldTimerRef.current);
+      touchHoldTimerRef.current = null;
+    }
+  }, []);
+
+  const deactivateLens = useCallback(() => {
+    isActiveRef.current = false;
+    setIsLensActive(false);
+    targetLensRef.current = {
+      ...targetLensRef.current,
+      radius: 0,
+    };
+    ensureAnimationLoop();
+  }, [ensureAnimationLoop]);
+
   useEffect(() => {
+    const handleScroll = () => {
+      if (lastPointerTypeRef.current === 'touch' || touchStateRef.current.phase !== 'idle') {
+        clearTouchHoldTimer();
+        touchStateRef.current = markTouchScrolling(touchStateRef.current);
+        if (isActiveRef.current) {
+          deactivateLens();
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
+      window.removeEventListener('scroll', handleScroll);
+      clearTouchHoldTimer();
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
     };
-  }, []);
+  }, [clearTouchHoldTimer, deactivateLens]);
 
   const getLocalCoords = (clientX: number, clientY: number) => {
     const container = containerRef.current;
@@ -251,15 +294,14 @@ export function AsciiPortrait({ src, alt }: AsciiPortraitProps) {
     };
   };
 
-  const handlePointerEnter = (e: React.PointerEvent<HTMLButtonElement>) => {
-    const coords = getLocalCoords(e.clientX, e.clientY);
+  const activateLensAtClientCoords = (clientX: number, clientY: number) => {
+    const coords = getLocalCoords(clientX, clientY);
     if (!coords) {
       return;
     }
     isActiveRef.current = true;
     setIsLensActive(true);
 
-    // Snap initial position on entry so radius expands smoothly right under the pointer
     if (currentLensRef.current.radius < 1) {
       currentLensRef.current = { x: coords.x, y: coords.y, radius: 0 };
     }
@@ -267,7 +309,81 @@ export function AsciiPortrait({ src, alt }: AsciiPortraitProps) {
     ensureAnimationLoop();
   };
 
+  const isGlobalTouchDragging = () => {
+    if (typeof document === 'undefined') {
+      return false;
+    }
+    const cursorCanvas = document.querySelector('[data-testid="glyph-stream-cursor"]');
+    return cursorCanvas?.getAttribute('data-touch-phase') === 'dragging';
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    lastPointerTypeRef.current = e.pointerType;
+    if (e.pointerType !== 'touch') {
+      return;
+    }
+    if (!e.isPrimary) {
+      clearTouchHoldTimer();
+      touchStateRef.current = markTouchScrolling(touchStateRef.current);
+      deactivateLens();
+      return;
+    }
+
+    clearTouchHoldTimer();
+    touchStateRef.current = startTouchGesture(
+      e.clientX,
+      e.clientY,
+      e.pointerId,
+      performance.now()
+    );
+
+    touchHoldTimerRef.current = window.setTimeout(() => {
+      touchHoldTimerRef.current = null;
+      const evaluated = evaluateTouchHold(touchStateRef.current, performance.now());
+      if (evaluated.phase === 'dragging' && touchStateRef.current.phase === 'pending') {
+        touchStateRef.current = evaluated;
+        activateLensAtClientCoords(evaluated.x, evaluated.y);
+      }
+    }, TOUCH_HOLD_MS);
+  };
+
+  const handlePointerEnter = (e: React.PointerEvent<HTMLButtonElement>) => {
+    lastPointerTypeRef.current = e.pointerType;
+    if (e.pointerType === 'touch') {
+      if (touchStateRef.current.phase === 'dragging' || isGlobalTouchDragging()) {
+        activateLensAtClientCoords(e.clientX, e.clientY);
+      }
+      return;
+    }
+    activateLensAtClientCoords(e.clientX, e.clientY);
+  };
+
   const handlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    lastPointerTypeRef.current = e.pointerType;
+    if (e.pointerType === 'touch') {
+      if (touchStateRef.current.pointerId === e.pointerId) {
+        const next = stepTouchMove(
+          touchStateRef.current,
+          e.clientX,
+          e.clientY,
+          performance.now()
+        );
+        touchStateRef.current = next;
+
+        if (next.phase === 'scrolling') {
+          clearTouchHoldTimer();
+          deactivateLens();
+          return;
+        }
+        if (next.phase !== 'dragging') {
+          return;
+        }
+        clearTouchHoldTimer();
+      } else if (!isGlobalTouchDragging()) {
+        return;
+      }
+    }
+
     const coords = getLocalCoords(e.clientX, e.clientY);
     if (!coords) {
       return;
@@ -280,14 +396,12 @@ export function AsciiPortrait({ src, alt }: AsciiPortraitProps) {
     ensureAnimationLoop();
   };
 
-  const handlePointerLeave = () => {
-    isActiveRef.current = false;
-    setIsLensActive(false);
-    targetLensRef.current = {
-      ...targetLensRef.current,
-      radius: 0,
-    };
-    ensureAnimationLoop();
+  const handlePointerLeave = (e?: React.PointerEvent<HTMLButtonElement>) => {
+    if (!e || e.pointerType === 'touch' || lastPointerTypeRef.current === 'touch') {
+      clearTouchHoldTimer();
+      touchStateRef.current = endTouchGesture();
+    }
+    deactivateLens();
   };
 
   const handleKeyToggle = () => {
@@ -326,13 +440,15 @@ export function AsciiPortrait({ src, alt }: AsciiPortraitProps) {
     <button
       ref={containerRef}
       type="button"
+      onPointerDown={handlePointerDown}
       onPointerEnter={handlePointerEnter}
       onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerLeave}
       onPointerLeave={handlePointerLeave}
       onPointerCancel={handlePointerLeave}
-      onBlur={handlePointerLeave}
+      onBlur={() => handlePointerLeave()}
       onClick={(e) => {
-        // Keyboard activation (detail === 0) or touch toggle
+        // Keyboard activation (detail === 0)
         if (e.detail === 0) {
           handleKeyToggle();
         }

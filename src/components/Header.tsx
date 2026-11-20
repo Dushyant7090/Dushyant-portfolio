@@ -49,19 +49,19 @@ export function Header() {
           >
             <a
               href="#work"
-              className="relative text-[12px] sm:text-[13.5px] md:text-[14px] font-medium text-[#111315]/90 hover:text-[#111315] transition-colors duration-200 whitespace-nowrap shrink-0 min-h-[40px] inline-flex items-center px-1 after:content-[''] after:absolute after:left-1 after:right-1 after:bottom-1.5 after:h-px after:bg-[#111315] after:scale-x-0 hover:after:scale-x-100 after:origin-left after:transition-transform after:duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#111315]"
+              className="relative text-[12px] sm:text-[13.5px] md:text-[14px] font-medium text-[#111315]/90 hover:text-[#111315] data-[touch-hover=true]:text-[#111315] transition-colors duration-200 whitespace-nowrap shrink-0 min-h-[40px] inline-flex items-center px-1 after:content-[''] after:absolute after:left-1 after:right-1 after:bottom-1.5 after:h-px after:bg-[#111315] after:scale-x-0 hover:after:scale-x-100 data-[touch-hover=true]:after:scale-x-100 after:origin-left after:transition-transform after:duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#111315]"
             >
               Work
             </a>
             <a
               href="#about"
-              className="relative text-[12px] sm:text-[13.5px] md:text-[14px] font-medium text-[#111315]/90 hover:text-[#111315] transition-colors duration-200 whitespace-nowrap shrink-0 min-h-[40px] inline-flex items-center px-1 after:content-[''] after:absolute after:left-1 after:right-1 after:bottom-1.5 after:h-px after:bg-[#111315] after:scale-x-0 hover:after:scale-x-100 after:origin-left after:transition-transform after:duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#111315]"
+              className="relative text-[12px] sm:text-[13.5px] md:text-[14px] font-medium text-[#111315]/90 hover:text-[#111315] data-[touch-hover=true]:text-[#111315] transition-colors duration-200 whitespace-nowrap shrink-0 min-h-[40px] inline-flex items-center px-1 after:content-[''] after:absolute after:left-1 after:right-1 after:bottom-1.5 after:h-px after:bg-[#111315] after:scale-x-0 hover:after:scale-x-100 data-[touch-hover=true]:after:scale-x-100 after:origin-left after:transition-transform after:duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#111315]"
             >
               About
             </a>
             <a
               href="#contact"
-              className="inline-flex items-center justify-center gap-1 sm:gap-1.5 bg-[rgb(218,72,24)] hover:bg-[rgb(196,62,18)] text-white text-[11.5px] sm:text-[13px] md:text-[13.5px] font-medium px-3 sm:px-5 md:px-6 py-2 sm:py-2.5 rounded-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(218,72,24,0.28)] motion-reduce:hover:translate-y-0 whitespace-nowrap shrink-0 min-h-[40px] sm:min-h-[42px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(218,72,24)]"
+              className="inline-flex items-center justify-center gap-1 sm:gap-1.5 bg-[rgb(218,72,24)] hover:bg-[rgb(196,62,18)] data-[touch-hover=true]:bg-[rgb(196,62,18)] text-white text-[11.5px] sm:text-[13px] md:text-[13.5px] font-medium px-3 sm:px-5 md:px-6 py-2 sm:py-2.5 rounded-lg transition-all duration-200 hover:-translate-y-0.5 data-[touch-hover=true]:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(218,72,24,0.28)] data-[touch-hover=true]:shadow-[0_6px_16px_rgba(218,72,24,0.28)] motion-reduce:hover:translate-y-0 whitespace-nowrap shrink-0 min-h-[40px] sm:min-h-[42px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(218,72,24)]"
             >
               <span>Let&apos;s talk</span>
               <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
