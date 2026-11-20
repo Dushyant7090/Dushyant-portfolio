@@ -87,7 +87,6 @@ export function IntroReassemblySection() {
           },
         });
 
-        // Anchor 0..1 duration covering entrance (0..0.46), calm reading hold (0.46..0.54), and bottom-up exit (0.54..0.96)
         tl.to({}, { duration: 1 }, 0);
 
         lines.forEach((lineEl, lineIdx) => {
@@ -105,7 +104,6 @@ export function IntroReassemblySection() {
           };
 
           if (win.initiallyVisible) {
-            // Line 1 appears immediately after leaving the hero section, subtly scattered horizontally
             gsap.set(lineEl, { opacity: 1, y: 0 });
             gsap.set(lineWords, {
               x: getOffsetX,
@@ -136,7 +134,6 @@ export function IntroReassemblySection() {
               win.wordStart
             );
           } else {
-            // Subsequent lines start hidden and rise in one by one as user scrolls
             gsap.set(lineEl, { opacity: 0, y: 22 });
             gsap.set(lineWords, {
               x: getOffsetX,
@@ -182,7 +179,6 @@ export function IntroReassemblySection() {
             );
           }
 
-          // Act II: Graceful top-down disappearance (top line lifts and dissolves first, progressing downward)
           const exitSpan = Math.max(0.03, win.exitEnd - win.exitStart);
           const exitWordStagger = lineWords.length > 1 ? exitSpan * 0.34 : 0;
           const exitWordDur = Math.max(0.02, exitSpan - exitWordStagger);
@@ -221,6 +217,14 @@ export function IntroReassemblySection() {
     };
 
     setupReassembly();
+
+    // Ensure re-measurement once webfonts finish loading on production hosts like Vercel
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        setupReassembly();
+        ScrollTrigger.refresh();
+      });
+    }
 
     let lastWidth = window.innerWidth;
     const handleResize = () => {
@@ -266,11 +270,11 @@ export function IntroReassemblySection() {
             : 'sticky top-0 h-dvh w-full pt-[72px] sm:pt-[88px] lg:pt-[96px] flex items-center justify-center overflow-x-clip'
         }
       >
-        <div className="w-full max-w-[980px] mx-auto px-5 sm:px-8 md:px-12 text-center flex flex-col items-center">
+        <div className="w-full max-w-[820px] mx-auto px-5 sm:px-8 md:px-12 text-center flex flex-col items-center">
           <p
             ref={paragraphRef}
             data-testid="intro-reassembly-paragraph"
-            className="font-display text-[clamp(1.02rem,2.15vw,1.95rem)] font-medium leading-[1.52] sm:leading-[1.54] tracking-[-0.005em] [word-spacing:0.04em] text-[#14191A] max-w-[940px] mx-auto text-center"
+            className="font-display text-[clamp(1.05rem,2.2vw,1.95rem)] font-medium leading-[1.52] sm:leading-[1.54] tracking-[-0.005em] [word-spacing:0.04em] text-[#14191A] max-w-[780px] mx-auto text-center [text-wrap:balance]"
           >
             {INTRO_PARAGRAPH}
           </p>
