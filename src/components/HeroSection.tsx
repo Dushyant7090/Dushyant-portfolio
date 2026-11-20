@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ArrowDown } from 'lucide-react';
+import { gsap, ScrollTrigger } from '../utils/gsapSetup';
 import { AsciiPortrait } from './AsciiPortrait';
 import { KineticIntro, type KineticIntroHandle } from './KineticIntro';
 import {
@@ -14,8 +13,6 @@ import {
   getProgressForPhraseIndex,
   isIntroRevealed,
 } from '../utils/scrollHeroLogic';
-
-gsap.registerPlugin(ScrollTrigger);
 
 export function HeroSection() {
   const trackRef = useRef<HTMLDivElement | null>(null);

@@ -8,10 +8,24 @@ import {
   type RefObject,
 } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { ContactShadows, Environment, Html, Lightformer, RoundedBox } from '@react-three/drei';
-import * as THREE from 'three';
-import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { ContactShadows } from '@react-three/drei/core/ContactShadows';
+import { Environment } from '@react-three/drei/core/Environment';
+import { Lightformer } from '@react-three/drei/core/Lightformer';
+import { RoundedBox } from '@react-three/drei/core/RoundedBox';
+import { Html } from '@react-three/drei/web/Html';
+import {
+  ACESFilmicToneMapping,
+  CanvasTexture,
+  FrontSide,
+  ShaderMaterial,
+  type Clock,
+  type Group,
+  type Mesh,
+  type MeshBasicMaterial,
+  type MeshPhysicalMaterial,
+  type PerspectiveCamera,
+} from 'three';
+import { gsap, ScrollTrigger } from '../utils/gsapSetup';
 import { getToolkitStats, TOOLKIT_CATEGORIES, type ToolkitCategory } from '../data/toolkit';
 import {
   computeResponsiveCameraFraming,
@@ -25,7 +39,6 @@ import {
   type ThreeTimerClockAdapter,
 } from '../utils/threeTimerClock';
 
-gsap.registerPlugin(ScrollTrigger);
 installThreeClockDeprecationFilter();
 
 interface ToolkitSectionProps {
@@ -57,7 +70,7 @@ function detectSoftwareWebGL(): boolean {
   }
 }
 
-function createSoftShadowTexture(): THREE.CanvasTexture | null {
+function createSoftShadowTexture(): CanvasTexture | null {
   if (typeof document === 'undefined') return null;
   const size = 256;
   const canvas = document.createElement('canvas');
@@ -74,7 +87,7 @@ function createSoftShadowTexture(): THREE.CanvasTexture | null {
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
 
-  const texture = new THREE.CanvasTexture(canvas);
+  const texture = new CanvasTexture(canvas);
   texture.needsUpdate = true;
   return texture;
 }
@@ -83,7 +96,7 @@ function ResponsiveCameraRig({ framing }: { framing: CameraFraming }) {
   const { camera } = useThree();
 
   useEffect(() => {
-    const persp = camera as THREE.PerspectiveCamera;
+    const persp = camera as PerspectiveCamera;
     persp.fov = framing.fovDeg;
     persp.position.set(0, 0, framing.cameraZ);
     persp.lookAt(0, 0, 0);
@@ -141,8 +154,8 @@ function ClearGlassEnvironment() {
   );
 }
 
-function createGlassEdgeFresnelMaterial(strength: number): THREE.ShaderMaterial {
-  return new THREE.ShaderMaterial({
+function createGlassEdgeFresnelMaterial(strength: number): ShaderMaterial {
+  return new ShaderMaterial({
     uniforms: {
       uOpacity: { value: 1 },
       uStrength: { value: strength },
@@ -186,7 +199,7 @@ function createGlassEdgeFresnelMaterial(strength: number): THREE.ShaderMaterial 
     `,
     transparent: true,
     depthWrite: false,
-    side: THREE.FrontSide,
+    side: FrontSide,
   });
 }
 
@@ -211,10 +224,10 @@ function ToolkitPrismScene({
   htmlPortalRef,
   isSoftwareGl,
 }: PrismSceneProps) {
-  const prismGroupRef = useRef<THREE.Group | null>(null);
-  const outerMatRef = useRef<THREE.MeshPhysicalMaterial | null>(null);
-  const floorShadowRef = useRef<THREE.Mesh | null>(null);
-  const floorShadowMatRef = useRef<THREE.MeshBasicMaterial | null>(null);
+  const prismGroupRef = useRef<Group | null>(null);
+  const outerMatRef = useRef<MeshPhysicalMaterial | null>(null);
+  const floorShadowRef = useRef<Mesh | null>(null);
+  const floorShadowMatRef = useRef<MeshBasicMaterial | null>(null);
   const frontDomRef = useRef<HTMLDivElement | null>(null);
   const backDomRef = useRef<HTMLDivElement | null>(null);
 
@@ -497,23 +510,36 @@ export function ToolkitSection({
       return;
     }
 
-    progressRef.current = 0;
-    const proxy = { progress: 0 };
+    const computeInitialProgress = () => {
+      const scrollable = Math.max(1, trackEl.offsetHeight - window.innerHeight);
+      const rect = trackEl.getBoundingClientRect();
+      return Math.max(0, Math.min(1, -rect.top / scrollable));
+    };
+
+    const initialProgress = computeInitialProgress();
+    progressRef.current = initialProgress;
+    const proxy = { progress: initialProgress };
     const ctx = gsap.context(() => {
-      gsap.to(proxy, {
-        progress: 1,
-        ease: 'none',
-        onUpdate: () => {
-          progressRef.current = proxy.progress;
+      const tween = gsap.fromTo(
+        proxy,
+        { progress: 0 },
+        {
+          progress: 1,
+          ease: 'none',
+          onUpdate: () => {
+            progressRef.current = proxy.progress;
+          },
+          scrollTrigger: {
+            trigger: trackEl,
+            start: 'top top',
+            end: 'bottom bottom',
+            scrub: 1.2,
+            invalidateOnRefresh: true,
+          },
         },
-        scrollTrigger: {
-          trigger: trackEl,
-          start: 'top top',
-          end: 'bottom bottom',
-          scrub: 1.2,
-          invalidateOnRefresh: true,
-        },
-      });
+      );
+      tween.progress(initialProgress);
+      progressRef.current = initialProgress;
     }, trackRef);
 
     const refreshTimer = window.setTimeout(() => {
@@ -581,7 +607,7 @@ export function ToolkitSection({
             antialias: !isSoftwareGl,
             alpha: true,
             powerPreference: 'high-performance',
-            toneMapping: THREE.ACESFilmicToneMapping,
+            toneMapping: ACESFilmicToneMapping,
             toneMappingExposure: 1.05,
           }}
           onCreated={(state) => {
@@ -590,7 +616,7 @@ export function ToolkitSection({
               typeof document !== 'undefined' ? document : null,
             );
             timerClockRef.current = timerClock;
-            state.set({ clock: timerClock as unknown as THREE.Clock });
+            state.set({ clock: timerClock as unknown as Clock });
           }}
         >
           <ToolkitPrismScene
@@ -612,3 +638,5 @@ export function ToolkitSection({
     </section>
   );
 }
+
+export default ToolkitSection;

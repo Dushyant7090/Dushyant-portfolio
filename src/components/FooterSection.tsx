@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUpRight } from 'lucide-react';
-import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { gsap, ScrollTrigger } from '../utils/gsapSetup';
 import {
   DEFAULT_WOVEN_PHYSICS,
   buildWovenWordmarkParticles,
@@ -21,8 +20,6 @@ import {
   stepTouchMove,
   type TouchGestureState,
 } from '../utils/touchCursor';
-
-gsap.registerPlugin(ScrollTrigger);
 
 function WovenPixelArrowUp() {
   return (

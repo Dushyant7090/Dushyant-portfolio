@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { Timer, getConsoleFunction, setConsoleFunction } from 'three';
 
 export interface ThreeTimerClockAdapter {
   autoStart: boolean;
@@ -37,8 +37,8 @@ export function installThreeClockDeprecationFilter(): void {
   if (threeConsoleFilterInstalled) return;
   threeConsoleFilterInstalled = true;
 
-  const previous = THREE.getConsoleFunction();
-  THREE.setConsoleFunction((type, message, ...params) => {
+  const previous = getConsoleFunction();
+  setConsoleFunction((type, message, ...params) => {
     if (shouldSuppressThreeDeprecationWarning(type, message)) {
       return;
     }
@@ -63,7 +63,7 @@ export function installThreeClockDeprecationFilter(): void {
  * runtime frame loop uses THREE.Timer without deprecated Clock calls.
  */
 export function createThreeTimerClock(doc?: Document | null): ThreeTimerClockAdapter {
-  const timer = new THREE.Timer();
+  const timer = new Timer();
   if (doc) {
     timer.connect(doc);
   }

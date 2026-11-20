@@ -3,7 +3,7 @@ import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { IntroReassemblySection } from './components/IntroReassemblySection';
 import { KeyboardScrollController } from './components/KeyboardScrollController';
-import { ToolkitSection } from './components/ToolkitSection';
+import { ToolkitLazyShell } from './components/ToolkitLazyShell';
 import { WorkSection } from './components/WorkSection';
 import { FooterSection } from './components/FooterSection';
 import { ScrollProgressRail } from './components/ScrollProgressRail';
@@ -18,7 +18,7 @@ export default function App() {
       <main>
         <HeroSection />
         <IntroReassemblySection />
-        <ToolkitSection />
+        <ToolkitLazyShell />
         <WorkSection />
       </main>
       <FooterSection />

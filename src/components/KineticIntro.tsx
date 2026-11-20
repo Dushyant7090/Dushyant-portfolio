@@ -5,12 +5,9 @@ import {
   useRef,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import gsap from 'gsap';
-import { SplitText } from 'gsap/SplitText';
+import { gsap, SplitText } from '../utils/gsapSetup';
 import { KINETIC_PHRASES } from '../utils/kineticPhrases';
 import { PHRASE_WINDOWS } from '../utils/scrollHeroLogic';
-
-gsap.registerPlugin(SplitText);
 
 export interface KineticIntroHandle {
   setProgress: (progress: number) => void;

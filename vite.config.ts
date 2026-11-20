@@ -19,8 +19,8 @@ export default defineConfig(() => {
           if (error) {
             return;
           }
-          const distDir = path.resolve(__dirname, 'dist');
-          const srcAssets = path.resolve(__dirname, 'src/assets');
+          const distDir = path.resolve(import.meta.dirname, 'dist');
+          const srcAssets = path.resolve(import.meta.dirname, 'src/assets');
           const distAssets = path.resolve(distDir, 'src/assets');
           if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
             fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
@@ -28,9 +28,44 @@ export default defineConfig(() => {
         },
       },
     ],
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              {
+                name: 'react-vendor',
+                test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/,
+                priority: 40,
+              },
+              {
+                name: 'gsap-vendor',
+                test: /node_modules[\\/]gsap[\\/]/,
+                priority: 35,
+              },
+              {
+                name: 'three-core',
+                test: /node_modules[\\/]three[\\/]build[\\/]three\.core/,
+                priority: 30,
+              },
+              {
+                name: 'three-renderer',
+                test: /node_modules[\\/]three[\\/]/,
+                priority: 25,
+              },
+              {
+                name: 'r3f-drei-vendor',
+                test: /node_modules[\\/](@react-three|three-stdlib|@monogrid|camera-controls|maath|suspend-react|react-use-measure|its-fine|zustand|use-sync-external-store|stats-gl|stats\.js|meshline|troika-|three-mesh-bvh|@use-gesture)[\\/]/,
+                priority: 20,
+              },
+            ],
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
       },
     },
     server: {

@@ -1,7 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { SplitText } from 'gsap/SplitText';
+import { gsap, ScrollTrigger, SplitText } from '../utils/gsapSetup';
 import {
   INTRO_PARAGRAPH,
   computeLineRevealSchedule,
@@ -9,8 +7,6 @@ import {
   getIntroPhase,
   isParagraphReassembled,
 } from '../utils/wordScatter';
-
-gsap.registerPlugin(ScrollTrigger, SplitText);
 
 export function IntroReassemblySection() {
   const trackRef = useRef<HTMLElement | null>(null);
