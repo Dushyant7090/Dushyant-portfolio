@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { gsap, ScrollTrigger, SplitText } from '../utils/gsapSetup';
 import {
+  EXIT_START_PROGRESS,
   INTRO_PARAGRAPH,
   computeLineRevealSchedule,
   computeWordScatterOffsets,
@@ -11,6 +12,8 @@ import {
 export function IntroReassemblySection() {
   const trackRef = useRef<HTMLElement | null>(null);
   const paragraphRef = useRef<HTMLParagraphElement | null>(null);
+  const headingEnterRef = useRef<HTMLDivElement | null>(null);
+  const headingExitRef = useRef<HTMLDivElement | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
@@ -26,12 +29,16 @@ export function IntroReassemblySection() {
   useLayoutEffect(() => {
     const trackEl = trackRef.current;
     const paragraphEl = paragraphRef.current;
+    const headingEnterEl = headingEnterRef.current;
+    const headingExitEl = headingExitRef.current;
     if (!trackEl || !paragraphEl) return;
 
     if (reducedMotion) {
       trackEl.dataset.scrollProgress = '1.000';
       trackEl.dataset.reassembled = 'true';
       trackEl.dataset.introPhase = 'assembled';
+      if (headingEnterEl) gsap.set(headingEnterEl, { opacity: 1, y: 0 });
+      if (headingExitEl) gsap.set(headingExitEl, { opacity: 1, y: 0 });
       return;
     }
 
@@ -44,6 +51,26 @@ export function IntroReassemblySection() {
       ctx?.revert();
 
       ctx = gsap.context(() => {
+        if (headingEnterEl) {
+          gsap.fromTo(
+            headingEnterEl,
+            { opacity: 0, y: 20 },
+            {
+              opacity: 1,
+              y: 0,
+              ease: 'power2.out',
+              immediateRender: true,
+              scrollTrigger: {
+                trigger: trackEl,
+                start: 'top 86%',
+                end: 'top 34%',
+                scrub: 1.0,
+                invalidateOnRefresh: true,
+              },
+            }
+          );
+        }
+
         const split = SplitText.create(paragraphEl, {
           type: 'lines,words',
           tag: 'span',
@@ -69,8 +96,8 @@ export function IntroReassemblySection() {
           scrollTrigger: {
             trigger: trackEl,
             start: 'top top',
-            end: 'bottom bottom',
-            scrub: 1.35,
+            end: 'bottom 35%',
+            scrub: 1.15,
             invalidateOnRefresh: true,
             onUpdate: (self) => {
               const p = self.progress;
@@ -84,6 +111,25 @@ export function IntroReassemblySection() {
         });
 
         tl.to({}, { duration: 1 }, 0);
+
+        if (headingExitEl) {
+          const headingExitSpan = Math.max(
+            0.08,
+            (schedule[0]?.exitEnd ?? EXIT_START_PROGRESS + 0.08) - EXIT_START_PROGRESS + 0.03
+          );
+          tl.fromTo(
+            headingExitEl,
+            { opacity: 1, y: 0 },
+            {
+              opacity: 0,
+              y: -16,
+              ease: 'power2.inOut',
+              duration: headingExitSpan,
+              immediateRender: false,
+            },
+            EXIT_START_PROGRESS
+          );
+        }
 
         lines.forEach((lineEl, lineIdx) => {
           const win = schedule[lineIdx];
@@ -256,7 +302,7 @@ export function IntroReassemblySection() {
       data-intro-phase={reducedMotion ? 'assembled' : 'entering'}
       data-reassembled={reducedMotion ? 'true' : 'false'}
       className={`relative w-full bg-[#ECEAE2] border-t border-[#D6D3C8] ${
-        reducedMotion ? 'py-20 sm:py-28 lg:py-32' : 'h-[460vh] sm:h-[540vh] lg:h-[620vh]'
+        reducedMotion ? 'py-20 sm:py-28 lg:py-32' : 'h-[330vh] sm:h-[370vh] lg:h-[410vh]'
       }`}
     >
       <div
@@ -266,14 +312,30 @@ export function IntroReassemblySection() {
             : 'sticky top-0 h-dvh w-full pt-[72px] sm:pt-[88px] lg:pt-[96px] flex items-center justify-center overflow-x-clip'
         }
       >
-        <div className="w-full max-w-[820px] mx-auto px-5 sm:px-8 md:px-12 text-center flex flex-col items-center">
-          <p
-            ref={paragraphRef}
-            data-testid="intro-reassembly-paragraph"
-            className="font-display text-[clamp(1.05rem,2.2vw,1.95rem)] font-medium leading-[1.52] sm:leading-[1.54] tracking-[-0.005em] [word-spacing:0.04em] text-[#14191A] max-w-[780px] mx-auto text-center [text-wrap:balance]"
-          >
-            {INTRO_PARAGRAPH}
-          </p>
+        <div className="w-full lg:w-[92%] lg:max-w-[1320px] mx-auto px-5 sm:px-8 md:px-12 lg:px-10">
+          <div className="relative flex flex-col items-center">
+            <div className="mb-4 sm:mb-5 lg:mb-0 lg:absolute lg:left-0 lg:top-0 lg:h-[calc(1.54*clamp(1.05rem,2.2vw,1.95rem))] lg:flex lg:items-center pointer-events-none">
+              <div ref={headingEnterRef} className="will-change-[transform,opacity]">
+                <div ref={headingExitRef} className="will-change-[transform,opacity]">
+                  <h2
+                    id="about-heading"
+                    data-testid="about-heading"
+                    className="font-display text-[11.5px] sm:text-[15px] md:text-[17px] lg:text-[19px] font-bold uppercase tracking-[0.015em] [word-spacing:0.14em] leading-[0.98] text-[#1A1A1A] text-center lg:text-left whitespace-nowrap select-none"
+                  >
+                    ABOUT ME
+                  </h2>
+                </div>
+              </div>
+            </div>
+
+            <p
+              ref={paragraphRef}
+              data-testid="intro-reassembly-paragraph"
+              className="font-display text-[clamp(1.05rem,2.2vw,1.95rem)] font-medium leading-[1.52] sm:leading-[1.54] tracking-[-0.005em] [word-spacing:0.04em] text-[#14191A] w-full max-w-[780px] lg:max-w-[600px] xl:max-w-[780px] mx-auto text-center [text-wrap:balance]"
+            >
+              {INTRO_PARAGRAPH}
+            </p>
+          </div>
         </div>
       </div>
     </section>

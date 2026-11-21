@@ -29,10 +29,13 @@ import { gsap, ScrollTrigger } from '../utils/gsapSetup';
 import { getToolkitStats, TOOLKIT_CATEGORIES, type ToolkitCategory } from '../data/toolkit';
 import {
   computeResponsiveCameraFraming,
+  computeToolkitLeftHeadingLayout,
+  computeToolkitLeftHeadingPose,
   computeToolkitPrismPose,
   type CameraFraming,
 } from '../utils/toolkitPrism';
 import { ToolkitFaceBoard } from './ToolkitFaceBoard';
+import { ToolkitLeftHeadingWordmark } from './ToolkitLeftHeadingWordmark';
 import {
   createThreeTimerClock,
   installThreeClockDeprecationFilter,
@@ -439,16 +442,39 @@ export function ToolkitSection({
   const trackRef = useRef<HTMLElement | null>(null);
   const progressRef = useRef(0);
   const htmlPortalRef = useRef<HTMLDivElement | null>(null);
+  const leftHeadingRef = useRef<HTMLDivElement | null>(null);
   const reducedMotionBoardRef = useRef<HTMLDivElement | null>(null);
 
   const [reducedMotion, setReducedMotion] = useState(false);
   const [isSoftwareGl] = useState(() => detectSoftwareWebGL());
+  const [viewportSize, setViewportSize] = useState(() => {
+    const w = typeof window !== 'undefined' ? window.innerWidth : 1440;
+    const h = typeof window !== 'undefined' ? window.innerHeight : 900;
+    return {
+      width: w,
+      height: h,
+      navbarBottomPx: w < 640 ? 66 : 84,
+    };
+  });
   const [framing, setFraming] = useState<CameraFraming>(() =>
     computeResponsiveCameraFraming({
       viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1440,
       viewportHeight: typeof window !== 'undefined' ? window.innerHeight : 900,
     }),
   );
+
+  const leftHeadingLayout = useMemo(
+    () =>
+      computeToolkitLeftHeadingLayout({
+        viewportWidth: viewportSize.width,
+        viewportHeight: viewportSize.height,
+        framing,
+        navbarBottomPx: viewportSize.navbarBottomPx,
+      }),
+    [viewportSize.width, viewportSize.height, viewportSize.navbarBottomPx, framing],
+  );
+  const leftHeadingLayoutRef = useRef(leftHeadingLayout);
+  leftHeadingLayoutRef.current = leftHeadingLayout;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -466,11 +492,15 @@ export function ToolkitSection({
     const updateFraming = () => {
       const navEl = document.querySelector('[data-testid="glass-navbar"]');
       const navBottom = navEl ? navEl.getBoundingClientRect().bottom : 88;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const clampedNavBottom = Math.max(60, Math.ceil(navBottom));
+      setViewportSize({ width, height, navbarBottomPx: clampedNavBottom });
       setFraming(
         computeResponsiveCameraFraming({
-          viewportWidth: window.innerWidth,
-          viewportHeight: window.innerHeight,
-          navbarHeightPx: Math.max(64, Math.ceil(navBottom)),
+          viewportWidth: width,
+          viewportHeight: height,
+          navbarHeightPx: Math.max(64, clampedNavBottom),
         }),
       );
       ScrollTrigger.refresh();
@@ -499,7 +529,30 @@ export function ToolkitSection({
 
   useLayoutEffect(() => {
     const trackEl = trackRef.current;
+    const headingEl = leftHeadingRef.current;
     if (!trackEl) return;
+
+    const syncLeftHeadingDom = (rawProgress: number) => {
+      const layoutVisible = leftHeadingLayoutRef.current.visible;
+      if (!layoutVisible) {
+        if (headingEl) {
+          headingEl.style.opacity = '0';
+          headingEl.style.visibility = 'hidden';
+        }
+        trackEl.dataset.headingVisible = 'false';
+        trackEl.dataset.headingOpacity = '0.000';
+        return;
+      }
+
+      const pose = computeToolkitLeftHeadingPose(rawProgress);
+      if (headingEl) {
+        headingEl.style.opacity = `${pose.opacity}`;
+        headingEl.style.visibility = pose.visible ? 'visible' : 'hidden';
+        headingEl.style.transform = `translate3d(${pose.translateX}px, ${pose.translateY}px, 0)`;
+      }
+      trackEl.dataset.headingVisible = pose.visible ? 'true' : 'false';
+      trackEl.dataset.headingOpacity = pose.opacity.toFixed(3);
+    };
 
     if (reducedMotion) {
       progressRef.current = 0.62;
@@ -507,17 +560,23 @@ export function ToolkitSection({
       trackEl.dataset.prismStage = 'presentation';
       trackEl.dataset.activeSide = 'front';
       trackEl.dataset.rotateY = '-360.0';
+      syncLeftHeadingDom(0.62);
       return;
     }
 
     const computeInitialProgress = () => {
-      const scrollable = Math.max(1, trackEl.offsetHeight - window.innerHeight);
+      const startOffset = window.innerHeight * 0.6;
+      const totalDistance = Math.max(
+        1,
+        trackEl.offsetHeight - window.innerHeight + startOffset,
+      );
       const rect = trackEl.getBoundingClientRect();
-      return Math.max(0, Math.min(1, -rect.top / scrollable));
+      return Math.max(0, Math.min(1, (startOffset - rect.top) / totalDistance));
     };
 
     const initialProgress = computeInitialProgress();
     progressRef.current = initialProgress;
+    syncLeftHeadingDom(initialProgress);
     const proxy = { progress: initialProgress };
     const ctx = gsap.context(() => {
       const tween = gsap.fromTo(
@@ -528,18 +587,20 @@ export function ToolkitSection({
           ease: 'none',
           onUpdate: () => {
             progressRef.current = proxy.progress;
+            syncLeftHeadingDom(proxy.progress);
           },
           scrollTrigger: {
             trigger: trackEl,
-            start: 'top top',
+            start: 'top 60%',
             end: 'bottom bottom',
-            scrub: 1.2,
+            scrub: 1.05,
             invalidateOnRefresh: true,
           },
         },
       );
       tween.progress(initialProgress);
       progressRef.current = initialProgress;
+      syncLeftHeadingDom(initialProgress);
     }, trackRef);
 
     const refreshTimer = window.setTimeout(() => {
@@ -550,7 +611,7 @@ export function ToolkitSection({
       window.clearTimeout(refreshTimer);
       ctx.revert();
     };
-  }, [reducedMotion]);
+  }, [reducedMotion, leftHeadingLayout.visible, leftHeadingLayout.placement]);
 
   if (reducedMotion) {
     return (
@@ -563,8 +624,44 @@ export function ToolkitSection({
         data-prism-stage="presentation"
         data-active-side="front"
         data-rotate-y="-360.0"
-        className="relative z-10 w-full scroll-mt-[84px] sm:scroll-mt-[100px] bg-[#ECEAE2] pt-[96px] sm:pt-[116px] pb-14 px-4 flex justify-center"
+        data-heading-visible={leftHeadingLayout.visible ? 'true' : 'false'}
+        data-heading-opacity={leftHeadingLayout.visible ? '1.000' : '0.000'}
+        className="relative z-10 w-full scroll-mt-[84px] sm:scroll-mt-[100px] bg-[#ECEAE2] pt-[96px] sm:pt-[116px] pb-14 px-4 flex flex-col items-center"
       >
+        {leftHeadingLayout.visible && leftHeadingLayout.placement === 'left-beside' && (
+          <div
+            style={{
+              left: `${leftHeadingLayout.leftPx}px`,
+              top: '144px',
+              width: `${leftHeadingLayout.widthPx}px`,
+            }}
+            className="pointer-events-none absolute z-20"
+          >
+            <div ref={leftHeadingRef} data-testid="toolkit-left-heading">
+              <ToolkitLeftHeadingWordmark
+                linesMode={leftHeadingLayout.linesMode}
+                lineHeightPx={leftHeadingLayout.wordmarkHeightPx}
+                lineGapPx={leftHeadingLayout.lineGapPx}
+              />
+            </div>
+          </div>
+        )}
+
+        {leftHeadingLayout.visible && leftHeadingLayout.placement === 'above-prism' && (
+          <div
+            style={{ width: framing.isMobile ? 356 : 960 }}
+            className="max-w-full px-4 sm:px-9 mb-3 pointer-events-none"
+          >
+            <div ref={leftHeadingRef} data-testid="toolkit-left-heading">
+              <ToolkitLeftHeadingWordmark
+                linesMode={leftHeadingLayout.linesMode}
+                lineHeightPx={leftHeadingLayout.wordmarkHeightPx}
+                lineGapPx={leftHeadingLayout.lineGapPx}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="rounded-2xl border border-[#6A0DAD]/25 bg-white/45 backdrop-blur-md shadow-[0_24px_60px_rgba(20,25,26,0.08),inset_0_1px_0_rgba(255,255,255,0.9)] overflow-hidden">
           <ToolkitFaceBoard
             categories={categories}
@@ -588,7 +685,9 @@ export function ToolkitSection({
       data-prism-stage="entrance"
       data-active-side="edge"
       data-rotate-y="-100.0"
-      className="relative z-10 w-full h-[440vh] sm:h-[480vh] lg:h-[540vh] scroll-mt-[84px] sm:scroll-mt-[100px] bg-[#ECEAE2]"
+      data-heading-visible="false"
+      data-heading-opacity="0.000"
+      className="relative z-10 w-full h-[350vh] sm:h-[380vh] lg:h-[420vh] scroll-mt-[84px] sm:scroll-mt-[100px] bg-[#ECEAE2]"
     >
       <div
         data-testid="toolkit-prism-stage"
@@ -634,6 +733,35 @@ export function ToolkitSection({
           ref={htmlPortalRef}
           className="pointer-events-none absolute inset-0 z-10 overflow-hidden"
         />
+
+        {leftHeadingLayout.visible && (
+          <div
+            style={{
+              left: `${leftHeadingLayout.leftPx}px`,
+              top: `${leftHeadingLayout.wordmarkTopPx}px`,
+              width: `${leftHeadingLayout.widthPx}px`,
+            }}
+            data-placement={leftHeadingLayout.placement}
+            className="pointer-events-none absolute z-20"
+          >
+            <div
+              ref={leftHeadingRef}
+              data-testid="toolkit-left-heading"
+              style={{
+                opacity: 0,
+                visibility: 'hidden',
+                transform: 'translate3d(-10px, 14px, 0)',
+              }}
+              className="will-change-[transform,opacity]"
+            >
+              <ToolkitLeftHeadingWordmark
+                linesMode={leftHeadingLayout.linesMode}
+                lineHeightPx={leftHeadingLayout.wordmarkHeightPx}
+                lineGapPx={leftHeadingLayout.lineGapPx}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

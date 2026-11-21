@@ -29,7 +29,7 @@ function ToolkitSectionPlaceholder({ reducedMotion }: { reducedMotion: boolean }
       data-scroll-progress="0.000"
       data-prism-stage="entrance"
       data-active-side="edge"
-      className="relative z-10 w-full h-[440vh] sm:h-[480vh] lg:h-[540vh] scroll-mt-[84px] sm:scroll-mt-[100px] bg-[#ECEAE2]"
+      className="relative z-10 w-full h-[350vh] sm:h-[380vh] lg:h-[420vh] scroll-mt-[84px] sm:scroll-mt-[100px] bg-[#ECEAE2]"
     >
       <div
         data-testid="toolkit-prism-stage"

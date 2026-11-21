@@ -170,7 +170,7 @@ export function computeToolkitPrismPose(
     translateY = lerp(isMobile ? -4.4 : -4.8, 0, easedLift);
     zOffset = lerp(-1.2, 0, easedLift) - (isMobile ? 0.9 : 1.35) * turnSin;
     scale = lerp(isMobile ? 0.42 : 0.34, 1, easedScale);
-    opacity = smoothstep(0, 0.14, tTurn);
+    opacity = smoothstep(0, 0.08, tTurn);
   } else if (p <= PRISM_PRESENT_END) {
     stage = 'presentation';
     rotateYDeg = -360;
@@ -215,5 +215,220 @@ export function computeToolkitPrismPose(
     frontFaceOpacity,
     backFaceOpacity,
     activeSide,
+  };
+}
+
+export type ToolkitLeftHeadingLinesMode = '1-line' | '2-lines' | '3-lines';
+export type ToolkitLeftHeadingPlacement = 'left-beside' | 'above-prism' | 'hidden';
+
+export interface ToolkitLeftHeadingLayout {
+  visible: boolean;
+  placement: ToolkitLeftHeadingPlacement;
+  leftPx: number;
+  wordmarkTopPx: number;
+  wordmarkHeightPx: number;
+  lineGapPx: number;
+  linesMode: ToolkitLeftHeadingLinesMode;
+  widthPx: number;
+  prismLeftPx: number;
+  gapPx: number;
+}
+
+export interface ToolkitLeftHeadingPose {
+  visible: boolean;
+  opacity: number;
+  translateX: number;
+  translateY: number;
+}
+
+export const LEFT_HEADING_REVEAL_END = 0.555;
+export const LEFT_HEADING_FADEOUT_START = 0.705;
+
+// Exact geometric viewBox widths (in 48-unit cap-height space) matching ToolkitWordmarkSvg
+export const LEFT_HEADING_ONE_LINE_VIEWBOX_W = 706;
+export const LEFT_HEADING_TWO_LINE_VIEWBOX_W = 420;
+export const LEFT_HEADING_THREE_LINE_VIEWBOX_W = 270;
+
+function computeMobileAndTabletWordmarkHeightPx(viewportWidth: number): number {
+  if (viewportWidth < 640) return 11;
+  if (viewportWidth < 768) return 13;
+  if (viewportWidth < 1024) return 15;
+  return 16;
+}
+
+/**
+ * Computes exact screen-space placement for "THE THINGS I KNOW":
+ * - Desktop (> 1024px landscape): left-side beside the settled prism on the TOOLKIT row (1:1 scale).
+ * - Mobile & Tablet (portrait or <= 1024px): single-line heading directly above the 3D Toolkit prism,
+ *   sized to match "DUSHYANT BENIWAL" in the navbar and aligned with the Toolkit wordmark column.
+ */
+export function computeToolkitLeftHeadingLayout(params: {
+  viewportWidth: number;
+  viewportHeight: number;
+  framing: CameraFraming;
+  navbarBottomPx?: number;
+}): ToolkitLeftHeadingLayout {
+  const safeW = Math.max(320, params.viewportWidth);
+  const safeH = Math.max(420, params.viewportHeight);
+  const { framing } = params;
+
+  const frontPlaneDist = framing.cameraZ - framing.dimensions.depth / 2;
+  const halfFovTan = Math.tan((framing.fovDeg * Math.PI) / 360);
+  const frontVisH = 2 * frontPlaneDist * halfFovTan;
+  const frontVisW = frontVisH * (safeW / safeH);
+
+  const prismWidthPx = (framing.dimensions.width / frontVisW) * safeW;
+  const prismHeightPx = (framing.dimensions.height / frontVisH) * safeH;
+  const prismLeftPx = round3((safeW - prismWidthPx) / 2);
+  const prismCenterYPx = safeH * (0.5 - framing.restingY / frontVisH);
+  const prismTopPx = prismCenterYPx - prismHeightPx / 2;
+
+  // Exact Three.js + drei <Html transform> screen projection of ToolkitFaceBoard's TOOLKIT SVG
+  const embeddedOffsetZ = framing.dimensions.depth * 0.14;
+  const boardPlaneDist = framing.cameraZ - embeddedOffsetZ;
+  const boardVisH = 2 * boardPlaneDist * halfFovTan;
+  const boardScale = (safeH / boardVisH) * (framing.htmlDistanceFactor / 400);
+  const boardLogicalW = framing.isMobile ? 356 : 960;
+  const boardLogicalH = framing.isMobile ? 592 : 548;
+  const boardPadX = framing.isMobile ? 16 : 36;
+  const boardPadTop = framing.isMobile ? 16 : 28;
+  const boardWidthPx = boardLogicalW * boardScale;
+  const boardHeightPx = boardLogicalH * boardScale;
+  const boardCenterYPx = safeH * (0.5 - framing.restingY / boardVisH);
+  const boardTopPx = boardCenterYPx - boardHeightPx / 2;
+  const boardLeftPx = (safeW - boardWidthPx) / 2;
+
+  // Mobile and Tablet placement: directly above the 3D Toolkit prism without overlapping navbar or prism
+  if (framing.isMobile || safeW <= 1024) {
+    const navbarBottomPx = params.navbarBottomPx ?? (safeW < 640 ? 66 : 84);
+    const heightPx = computeMobileAndTabletWordmarkHeightPx(safeW);
+    const widthPx = Math.ceil(LEFT_HEADING_ONE_LINE_VIEWBOX_W * (heightPx / 48));
+    const availableGap = prismTopPx - navbarBottomPx;
+
+    if (availableGap < heightPx + 14) {
+      return {
+        visible: false,
+        placement: 'hidden',
+        leftPx: 0,
+        wordmarkTopPx: navbarBottomPx + 8,
+        wordmarkHeightPx: heightPx,
+        lineGapPx: 0,
+        linesMode: '1-line',
+        widthPx: 0,
+        prismLeftPx,
+        gapPx: 0,
+      };
+    }
+
+    const bottomMargin = Math.min(24, Math.max(8, Math.round(availableGap * 0.28)));
+    const topPx = round3(
+      Math.max(navbarBottomPx + 8, prismTopPx - bottomMargin - heightPx),
+    );
+    const alignedLeftPx = round3(boardLeftPx + boardPadX * boardScale);
+    const maxSafeLeft = Math.max(12, safeW - widthPx - 12);
+    const clampedLeftPx = round3(Math.min(Math.max(12, alignedLeftPx), maxSafeLeft));
+
+    return {
+      visible: true,
+      placement: 'above-prism',
+      leftPx: clampedLeftPx,
+      wordmarkTopPx: topPx,
+      wordmarkHeightPx: heightPx,
+      lineGapPx: 0,
+      linesMode: '1-line',
+      widthPx,
+      prismLeftPx,
+      gapPx: bottomMargin,
+    };
+  }
+
+  const wordmarkTopPx = round3(boardTopPx + boardPadTop * boardScale);
+  const wordmarkHeightPx = round3(30 * boardScale);
+  const lineGapPx = Math.max(8, Math.round(wordmarkHeightPx * 0.34));
+
+  const outerPadPx = Math.round(Math.min(40, Math.max(22, prismLeftPx * 0.085)));
+  const gapPx = Math.round(Math.min(36, Math.max(20, prismLeftPx * 0.085)));
+  const maxSlotWidthPx = prismLeftPx - outerPadPx - gapPx;
+
+  const scaleFromCap = wordmarkHeightPx / 48;
+  const twoLineWidthPx = Math.ceil(LEFT_HEADING_TWO_LINE_VIEWBOX_W * scaleFromCap);
+  const threeLineWidthPx = Math.ceil(LEFT_HEADING_THREE_LINE_VIEWBOX_W * scaleFromCap);
+
+  if (twoLineWidthPx <= maxSlotWidthPx) {
+    return {
+      visible: true,
+      placement: 'left-beside',
+      leftPx: outerPadPx,
+      wordmarkTopPx,
+      wordmarkHeightPx,
+      lineGapPx,
+      linesMode: '2-lines',
+      widthPx: twoLineWidthPx,
+      prismLeftPx,
+      gapPx,
+    };
+  }
+
+  if (threeLineWidthPx <= maxSlotWidthPx) {
+    return {
+      visible: true,
+      placement: 'left-beside',
+      leftPx: outerPadPx,
+      wordmarkTopPx,
+      wordmarkHeightPx,
+      lineGapPx,
+      linesMode: '3-lines',
+      widthPx: threeLineWidthPx,
+      prismLeftPx,
+      gapPx,
+    };
+  }
+
+  return {
+    visible: false,
+    placement: 'hidden',
+    leftPx: outerPadPx,
+    wordmarkTopPx,
+    wordmarkHeightPx,
+    lineGapPx,
+    linesMode: '3-lines',
+    widthPx: 0,
+    prismLeftPx,
+    gapPx,
+  };
+}
+
+/**
+ * Computes reversible scroll-synchronized visibility for "THE THINGS I KNOW".
+ * Strictly hidden (opacity = 0) during entrance, rotation, and exit stages,
+ * revealing with a subtle slide + fade exclusively inside the front-facing presentation hold.
+ */
+export function computeToolkitLeftHeadingPose(
+  rawProgress: number,
+): ToolkitLeftHeadingPose {
+  const p = clamp01(rawProgress);
+
+  if (p <= PRISM_TURN_END || p >= PRISM_PRESENT_END) {
+    return {
+      visible: false,
+      opacity: 0,
+      translateX: p <= PRISM_TURN_END ? -10 : 0,
+      translateY: p <= PRISM_TURN_END ? 14 : -10,
+    };
+  }
+
+  const enterT = smoothstep(PRISM_TURN_END, LEFT_HEADING_REVEAL_END, p);
+  const exitT = smoothstep(LEFT_HEADING_FADEOUT_START, PRISM_PRESENT_END, p);
+  const opacity = round3(clamp01(enterT * (1 - exitT)));
+
+  const enterEase = easeOutCubic(enterT);
+  const translateX = round3(lerp(-10, 0, enterEase));
+  const translateY = round3(lerp(14, 0, enterEase) + lerp(0, -10, exitT));
+
+  return {
+    visible: opacity > 0.004,
+    opacity,
+    translateX,
+    translateY,
   };
 }

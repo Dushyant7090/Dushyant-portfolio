@@ -255,8 +255,6 @@ export const KineticIntro = forwardRef<KineticIntroHandle, KineticIntroProps>(
       }
     };
 
-    const activePhrase = KINETIC_PHRASES[activeIndex] ?? KINETIC_PHRASES[0];
-
     return (
       <div
         ref={stageRef}
@@ -268,17 +266,6 @@ export const KineticIntro = forwardRef<KineticIntroHandle, KineticIntroProps>(
           isVisible ? 'pointer-events-auto' : 'pointer-events-none'
         }`}
       >
-        {/* Top index & scroll cue */}
-        <div className="flex items-center gap-3 sm:gap-4 text-[11px] font-mono tracking-[0.14em] uppercase text-[#6D7270] mb-4 sm:mb-8 lg:mb-10">
-          <span className="text-[rgb(218,72,24)] font-medium tabular-nums">
-            {activePhrase.index} / 0{KINETIC_PHRASES.length}
-          </span>
-          <span aria-hidden="true" className="text-[#B8B5AA]">
-            ·
-          </span>
-          <span>SCROLL OR SELECT TO SEQUENCE</span>
-        </div>
-
         {/* Stacked kinetic phrase stage (fixed height prevents layout shift) */}
         <div
           aria-live="polite"
